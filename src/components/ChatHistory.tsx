@@ -19,11 +19,11 @@ export function ChatHistory({ messages }: ChatHistoryProps) {
   return (
     <div
       ref={scrollRef}
-      className="min-h-[150px] sm:min-h-[200px] max-h-[250px] sm:max-h-[350px] overflow-y-auto bg-gradient-to-b from-gray-50 to-blue-50/30 rounded-xl p-3 sm:p-4 mb-4 shadow-inner border border-gray-100 scrollbar-thin"
+      className="min-h-[200px] sm:min-h-[250px] tablet:min-h-[300px] max-h-[300px] sm:max-h-[400px] tablet:max-h-[450px] overflow-y-auto bg-gradient-to-b from-gray-50 to-blue-50/30 rounded-xl p-4 sm:p-5 mb-4 sm:mb-6 shadow-inner border border-gray-100 scrollbar-thin"
     >
       {messages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-xs sm:text-sm">
-          <MessageCircle className="w-6 sm:w-8 h-6 sm:h-8 mb-2 opacity-50" />
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm sm:text-base">
+          <MessageCircle className="w-8 sm:w-10 tablet:w-12 h-8 sm:h-10 tablet:h-12 mb-3 opacity-50" />
           <span className="text-center px-2">Start a conversation...</span>
         </div>
       ) : (
