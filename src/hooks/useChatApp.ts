@@ -18,13 +18,13 @@ export function useChatApp() {
     
     return new Promise((resolve) => {
       const promptEmail = () => {
-        const userEmail = window.prompt("Enter your email (used as chat ID):");
+        const userEmail = window.prompt("Enter your email (this will be your permanent Chat ID):");
         if (userEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
           const trimmedEmail = userEmail.trim();
           setEmail(trimmedEmail);
           resolve(trimmedEmail);
         } else {
-          alert("Please enter a valid email address.");
+          alert("Please enter a valid email address. This will be saved as your permanent Chat ID.");
           promptEmail();
         }
       };

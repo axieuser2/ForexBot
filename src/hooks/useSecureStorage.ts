@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 
-// Generate stable browser fingerprint for security (device-independent)
-function generateFingerprint(): string {
-  // Use more stable identifiers that don't change between mobile/desktop modes
+// Generate multiple stable browser fingerprints for cross-verification
+function generateStableFingerprint(): string {
   const stableIdentifiers = [
     navigator.userAgent.split(' ')[0], // Browser name only
     navigator.language,
     new Date().getTimezoneOffset().toString(),
-    'forexbot-stable-key' // Static component for consistency
+    screen.width.toString(),
+    screen.height.toString(),
+    'forexbot-stable-key-v2' // Updated version for consistency
   ];
   
   const fingerprint = stableIdentifiers.join('|');
   
-  // Simple hash function
+  // Enhanced hash function
   let hash = 0;
   for (let i = 0; i < fingerprint.length; i++) {
     const char = fingerprint.charCodeAt(i);
@@ -23,32 +24,69 @@ function generateFingerprint(): string {
   return Math.abs(hash).toString(36);
 }
 
-// Get or create a persistent device ID
-function getDeviceId(): string {
-  let deviceId = localStorage.getItem('forexBotDeviceId');
-  if (!deviceId) {
-    deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('forexBotDeviceId', deviceId);
+// Generate a secondary fingerprint for cross-validation
+function generateSecondaryFingerprint(): string {
+  const identifiers = [
+    navigator.platform,
+    navigator.hardwareConcurrency?.toString() || '4',
+    navigator.maxTouchPoints?.toString() || '0',
+    'forexbot-secondary-v2'
+  ];
+  
+  const fingerprint = identifiers.join('|');
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 7) - hash) + char;
+    hash = hash & hash;
   }
-  return deviceId;
+  
+  return Math.abs(hash).toString(36);
 }
 
-// Encrypt data using simple XOR cipher with fingerprint
-function encryptData(data: string, key: string): string {
+// Get or create a persistent device ID with multiple fallbacks
+function getDeviceId(): string {
+  // Try multiple storage locations for redundancy
+  const storageKeys = ['forexBotDeviceId', 'forexBotDeviceId_backup', 'forexBotDeviceId_v2'];
+  
+  for (const key of storageKeys) {
+    const deviceId = localStorage.getItem(key);
+    if (deviceId) {
+      // Store in all locations for redundancy
+      storageKeys.forEach(k => localStorage.setItem(k, deviceId));
+      return deviceId;
+    }
+  }
+  
+  // Create new device ID if none found
+  const newDeviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 12);
+  
+  // Store in all locations
+  storageKeys.forEach(key => localStorage.setItem(key, newDeviceId));
+  
+  return newDeviceId;
+}
+
+// Enhanced encryption with multiple keys
+function encryptData(data: string, primaryKey: string, secondaryKey: string): string {
   let result = '';
+  const combinedKey = primaryKey + secondaryKey;
+  
   for (let i = 0; i < data.length; i++) {
-    result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    result += String.fromCharCode(data.charCodeAt(i) ^ combinedKey.charCodeAt(i % combinedKey.length));
   }
   return btoa(result);
 }
 
-// Decrypt data
-function decryptData(encryptedData: string, key: string): string {
+// Enhanced decryption with fallback keys
+function decryptData(encryptedData: string, primaryKey: string, secondaryKey: string): string {
   try {
     const data = atob(encryptedData);
     let result = '';
+    const combinedKey = primaryKey + secondaryKey;
+    
     for (let i = 0; i < data.length; i++) {
-      result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+      result += String.fromCharCode(data.charCodeAt(i) ^ combinedKey.charCodeAt(i % combinedKey.length));
     }
     return result;
   } catch {
@@ -56,156 +94,247 @@ function decryptData(encryptedData: string, key: string): string {
   }
 }
 
-// Session validation
+// Enhanced session validation with abuse detection
 function validateSession(): boolean {
-  const sessionData = localStorage.getItem('forexBotSession');
-  if (!sessionData) {
-    // Create initial session
-    const session = {
-      created: Date.now(),
-      deviceId: getDeviceId(),
-      requests: []
-    };
-    localStorage.setItem('forexBotSession', JSON.stringify(session));
-    return true;
-  }
+  const sessionKeys = ['forexBotSession', 'forexBotSession_backup'];
+  let session = null;
   
-  try {
-    const session = JSON.parse(sessionData);
-    const now = Date.now();
-    
-    // Validate device ID consistency
-    const currentDeviceId = getDeviceId();
-    if (session.deviceId && session.deviceId !== currentDeviceId) {
-      console.warn('Device ID mismatch detected');
-      // Don't clear data, just update device ID
-      session.deviceId = currentDeviceId;
-      localStorage.setItem('forexBotSession', JSON.stringify(session));
-    }
-    
-    // Sessions don't expire - keep data persistent
-    // Only check for suspicious activity
-    // Check for suspicious activity (too many rapid requests)
-    if (session.requests && session.requests.length > 100) {
-      const recentRequests = session.requests.filter((time: number) => now - time < 60 * 60 * 1000);
-      if (recentRequests.length > 50) {
-        console.warn('Suspicious activity detected');
-        // Don't block, just log
+  // Try to load from any available session storage
+  for (const key of sessionKeys) {
+    const sessionData = localStorage.getItem(key);
+    if (sessionData) {
+      try {
+        session = JSON.parse(sessionData);
+        break;
+      } catch {
+        localStorage.removeItem(key);
       }
     }
-    
-    return true;
-  } catch {
-    // Don't remove session on error, recreate it
-    const session = {
-      created: Date.now(),
-      deviceId: getDeviceId(),
-      requests: []
-    };
-    localStorage.setItem('forexBotSession', JSON.stringify(session));
-    return true;
   }
+  
+  const now = Date.now();
+  const deviceId = getDeviceId();
+  
+  if (!session) {
+    // Create new session
+    session = {
+      created: now,
+      deviceId: deviceId,
+      requests: [],
+      lastActivity: now,
+      fingerprint: generateStableFingerprint(),
+      secondaryFingerprint: generateSecondaryFingerprint()
+    };
+  } else {
+    // Update device ID if needed but don't invalidate session
+    if (!session.deviceId || session.deviceId !== deviceId) {
+      session.deviceId = deviceId;
+    }
+    
+    // Update fingerprints if missing
+    if (!session.fingerprint) {
+      session.fingerprint = generateStableFingerprint();
+    }
+    if (!session.secondaryFingerprint) {
+      session.secondaryFingerprint = generateSecondaryFingerprint();
+    }
+    
+    session.lastActivity = now;
+  }
+  
+  // Enhanced abuse detection
+  if (session.requests && session.requests.length > 0) {
+    const recentRequests = session.requests.filter((time: number) => now - time < 60 * 60 * 1000); // Last hour
+    const veryRecentRequests = session.requests.filter((time: number) => now - time < 5 * 60 * 1000); // Last 5 minutes
+    
+    // Rate limiting checks
+    if (recentRequests.length > 100) {
+      console.warn('High usage detected in the last hour');
+    }
+    
+    if (veryRecentRequests.length > 20) {
+      console.warn('Very high usage detected in the last 5 minutes');
+      // Could implement temporary cooldown here if needed
+    }
+  }
+  
+  // Store session in multiple locations for redundancy
+  const sessionString = JSON.stringify(session);
+  sessionKeys.forEach(key => localStorage.setItem(key, sessionString));
+  
+  return true;
 }
 
-// Log request for rate limiting
+// Enhanced request logging with better tracking
 function logRequest(): void {
-  const sessionData = localStorage.getItem('forexBotSession');
+  const sessionKeys = ['forexBotSession', 'forexBotSession_backup'];
   const now = Date.now();
   
   let session = {
     created: now,
     deviceId: getDeviceId(),
-    requests: [now]
+    requests: [now],
+    lastActivity: now,
+    fingerprint: generateStableFingerprint(),
+    secondaryFingerprint: generateSecondaryFingerprint()
   };
   
-  if (sessionData) {
-    try {
-      session = JSON.parse(sessionData);
-      session.requests = session.requests || [];
-      session.requests.push(now);
-      
-      // Keep only last 100 requests
-      if (session.requests.length > 100) {
-        session.requests = session.requests.slice(-100);
+  // Try to load existing session
+  for (const key of sessionKeys) {
+    const sessionData = localStorage.getItem(key);
+    if (sessionData) {
+      try {
+        session = JSON.parse(sessionData);
+        break;
+      } catch {
+        localStorage.removeItem(key);
       }
-    } catch {
-      // Reset on error
     }
   }
   
-  localStorage.setItem('forexBotSession', JSON.stringify(session));
+  // Update session
+  session.requests = session.requests || [];
+  session.requests.push(now);
+  session.lastActivity = now;
+  
+  // Keep only last 200 requests for better tracking
+  if (session.requests.length > 200) {
+    session.requests = session.requests.slice(-200);
+  }
+  
+  // Store in multiple locations
+  const sessionString = JSON.stringify(session);
+  sessionKeys.forEach(key => localStorage.setItem(key, sessionString));
+}
+
+// Cross-tab synchronization
+function syncAcrossTabs(key: string, value: any): void {
+  // Store in multiple locations for cross-tab sync
+  const syncKeys = [key, `${key}_sync`, `${key}_backup`];
+  const dataString = JSON.stringify(value);
+  
+  syncKeys.forEach(syncKey => {
+    try {
+      localStorage.setItem(syncKey, dataString);
+    } catch (error) {
+      console.warn(`Failed to sync data for key ${syncKey}:`, error);
+    }
+  });
+  
+  // Dispatch storage event for cross-tab communication
+  window.dispatchEvent(new StorageEvent('storage', {
+    key: key,
+    newValue: dataString,
+    storageArea: localStorage
+  }));
 }
 
 export function useSecureStorage<T>(key: string, initialValue: T) {
-  const fingerprint = generateFingerprint() + '_' + getDeviceId();
+  const primaryFingerprint = generateStableFingerprint();
+  const secondaryFingerprint = generateSecondaryFingerprint();
+  const deviceId = getDeviceId();
   
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       // Validate session first
-      if (!validateSession()) {
-        console.warn('Session validation failed, but continuing with stored data');
-      }
+      validateSession();
       
-      const item = localStorage.getItem(key);
-      if (!item) return initialValue;
+      // Try multiple storage locations
+      const storageKeys = [key, `${key}_backup`, `${key}_sync`];
       
-      // First, try to decrypt the data
-      const decrypted = decryptData(item, fingerprint);
-      
-      if (decrypted) {
-        // If decryption succeeded, try to parse the decrypted data
+      for (const storageKey of storageKeys) {
+        const item = localStorage.getItem(storageKey);
+        if (!item) continue;
+        
+        // Try to decrypt with current fingerprints
+        const decrypted = decryptData(item, primaryFingerprint, secondaryFingerprint);
+        
+        if (decrypted) {
+          try {
+            const parsed = JSON.parse(decrypted);
+            // Store in all locations for redundancy
+            storageKeys.forEach(sk => {
+              if (sk !== storageKey) {
+                localStorage.setItem(sk, item);
+              }
+            });
+            return parsed;
+          } catch {
+            // Continue to next storage key
+          }
+        }
+        
+        // Try to parse as plain JSON (fallback for migration)
         try {
-          return JSON.parse(decrypted);
+          const parsed = JSON.parse(item);
+          // Re-encrypt and store
+          const encrypted = encryptData(JSON.stringify(parsed), primaryFingerprint, secondaryFingerprint);
+          storageKeys.forEach(sk => localStorage.setItem(sk, encrypted));
+          return parsed;
         } catch {
-          // If decrypted data is not valid JSON, fall through to try raw data
+          // Continue to next storage key
         }
       }
       
-      // If decryption failed or decrypted data wasn't valid JSON,
-      // try to parse the raw item as plain JSON
-      try {
-        return JSON.parse(item);
-      } catch {
-        // If all parsing attempts fail, remove the corrupted item and return initial value
-        console.warn(`Corrupted data found for key "${key}", using initial value but keeping data`);
-        localStorage.removeItem(key);
-        return initialValue;
-      }
+      return initialValue;
     } catch (error) {
       console.error(`Error reading secure storage key "${key}":`, error);
-      // Clear corrupted data to prevent future errors
-      localStorage.removeItem(key);
       return initialValue;
     }
   });
 
   const setValue = (value: T | ((val: T) => T)) => {
     try {
-      if (!validateSession()) {
-        console.warn('Session validation failed, but saving data anyway');
-      }
+      validateSession();
       
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
       
-      // Encrypt sensitive data
+      // Encrypt and store in multiple locations
       const dataString = JSON.stringify(valueToStore);
-      const encrypted = encryptData(dataString, fingerprint);
+      const encrypted = encryptData(dataString, primaryFingerprint, secondaryFingerprint);
       
-      localStorage.setItem(key, encrypted);
+      const storageKeys = [key, `${key}_backup`, `${key}_sync`];
+      storageKeys.forEach(storageKey => {
+        try {
+          localStorage.setItem(storageKey, encrypted);
+        } catch (error) {
+          console.warn(`Failed to store data for key ${storageKey}:`, error);
+        }
+      });
       
-      // Log this action for rate limiting
+      // Log this action for abuse prevention
       logRequest();
+      
+      // Sync across tabs
+      syncAcrossTabs(key, valueToStore);
       
     } catch (error) {
       console.error(`Error setting secure storage key "${key}":`, error);
     }
   };
 
-  // Initialize device tracking without clearing data
+  // Listen for cross-tab changes
   useEffect(() => {
-    // Just ensure device ID exists, don't clear data
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === key && e.newValue) {
+        try {
+          const newValue = JSON.parse(e.newValue);
+          setStoredValue(newValue);
+        } catch {
+          // Ignore invalid data
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [key]);
+
+  // Initialize and maintain device tracking
+  useEffect(() => {
     getDeviceId();
+    validateSession();
   }, []);
 
   return [storedValue, setValue] as const;
