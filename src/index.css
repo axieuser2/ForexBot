@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ensure proper touch targets on mobile */
+@layer base {
+  button, input, select, textarea {
+    @apply min-h-[44px] sm:min-h-[auto];
+  }
+  
+  /* Improve text readability on small screens */
+  body {
+    @apply text-sm sm:text-base;
+  }
+  
+  /* Prevent horizontal scroll on mobile */
+  html, body {
+    @apply overflow-x-hidden;
+  }
+  
+  /* Better scrolling on mobile */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Custom scrollbar for chat history */
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded-full;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
