@@ -10,7 +10,7 @@ export function Header({ email, onPremiumClick }: HeaderProps) {
     <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white p-4 sm:p-6 shadow-xl">
       <div className="flex flex-col mb-3 sm:mb-0">
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 tracking-wide">
-          <img src="/logo.jpg" alt="ForexBot Logo" className="w-7 h-7 rounded-full object-cover" />
+          <img src="/images.jpg" alt="ForexBot Logo" className="w-7 h-7 rounded-full object-cover" />
           ForexBot
         </h1>
         <p className="text-xs sm:text-sm opacity-90 font-medium">Multi-Agent AI for Gold & Forex Analysis</p>

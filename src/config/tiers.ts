@@ -31,7 +31,7 @@ export const WEBHOOK_URLS = [
   "https://asdfasfdsvd.app.n8n.cloud/webhook-test/2d83855b-305b-40fe-90d9-628f9b2de054"
 ];
 
-export const FIXED_AI_RESPONSE = "Your Analysis is being process and on its way to your E-mail Inbox! It may takes 2 minutes for you to receive them in your inbox!";
+export const FIXED_AI_RESPONSE = "Your Analysis is being process and on its way to your E-mail Inbox! As we delve into advance search! It may take about 5-15 minutes for you to have the analysis in your Inbox!";
 
 export const LOCAL_STORAGE_KEYS = {
   EMAIL: "forexBotEmail",
